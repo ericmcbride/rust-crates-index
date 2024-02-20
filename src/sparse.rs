@@ -15,6 +15,7 @@ impl SparseIndex {
     /// Note this function takes the `CARGO_HOME` environment variable into account
     #[inline]
     pub fn from_url(url: &str) -> Result<Self, Error> {
+        println!("Home cargo is {:?}", home::cargo_home());
         Self::with_path(home::cargo_home()?, url)
     }
 
@@ -41,6 +42,7 @@ impl SparseIndex {
         }
 
         let (path, url) = local_path_and_canonical_url(url, Some(cargo_home.as_ref()))?;
+        println!("Path is {:?}", path);
         Ok(Self::at_path(path, url))
     }
 
