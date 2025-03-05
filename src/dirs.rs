@@ -218,7 +218,8 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
             if let Some(idx) = params_index {
                 canonical.truncate(canonical.len() - (canonical.len() - idx));
             }
-
+            eprintln!("IDENT IS {:?}", ident);
+            eprintln!("Canonical is {:?}", canonical);
             (ident, canonical)
         }
         HashKind::Legacy => {
@@ -241,6 +242,8 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
             if canonical.contains("github.com/") && canonical.ends_with(".git") {
                 canonical.truncate(canonical.len() - 4);
             }
+            eprintln!("IDENT IS {:?}", ident);
+            eprintln!("Canonical is {:?}", canonical);
 
             (ident, canonical)
         }
