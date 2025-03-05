@@ -147,10 +147,21 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
         let scheme_ind = url
             .find("://")
             .ok_or_else(|| Error::Url(format!("'{url}' is not a valid url")))?;
-
         let scheme_str = &url[..scheme_ind];
         if scheme_str.starts_with("sparse+http") {
             registry_kind = SOURCE_KIND_SPASE_REGISTRY;
+            // if a custom uri ends with a slash it messes up the
+            // hash.  BUt if we remove it from crates IO it messes it up
+            // as well.
+            let url = if !url.contains("index.crates.io") {
+                if let Some(stripped_url) = url.strip_prefix('/') {
+                    stripped_url
+                } else {
+                    url
+                }
+            } else {
+                url
+            };
             (url, scheme_ind)
         } else if let Some(ind) = scheme_str.find('+') {
             if &scheme_str[..ind] != "registry" {
@@ -163,95 +174,92 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
         }
     };
 
+    eprintln!("Url is {:?}", url);
     // Could use the Url crate for this, but it's simple enough and we don't
     // need to deal with every possible url (I hope...)
     let host = match url[scheme_ind + 3..].find('/') {
         Some(end) => &url[scheme_ind + 3..scheme_ind + 3 + end],
         None => &url[scheme_ind + 3..],
     };
-    eprintln!("Host after match url {:?}", host);
+
     // trim port
     let host = host.split(':').next().unwrap();
 
-    let mut canonical = if registry_kind == SOURCE_KIND_REGISTRY {
+    let (ident, url) = if registry_kind == SOURCE_KIND_REGISTRY {
         // cargo special cases github.com for reasons, so do the same
-        let canonical = if host == "github.com" {
+        let mut canonical = if host == "github.com" {
             url.to_lowercase()
         } else {
             url.to_owned()
         };
-        canonical
-    } else {
-        // in case of Sparse Index Registry
-        url.to_string()
-    };
 
-    let (ident, url) = match hash_kind {
-        HashKind::Stable => {
-            // Locate the the first instance of params/fragments.
-            let mut params_index = {
-                let question = canonical.find('?');
-                let hash = canonical.rfind('#');
+        let ident = match hash_kind {
+            HashKind::Stable => {
+                // Locate the the first instance of params/fragments.
+                let mut params_index = {
+                    let question = canonical.find('?');
+                    let hash = canonical.rfind('#');
 
-                question.zip(hash).map(|(q, h)| q.min(h)).or(question).or(hash)
-            };
+                    question.zip(hash).map(|(q, h)| q.min(h)).or(question).or(hash)
+                };
 
-            // Attempt to trim `.git` from the end of url paths.
-            canonical = if let Some(idx) = params_index {
-                let base_url = &canonical[..idx];
-                let params = &canonical[idx..];
+                // Attempt to trim `.git` from the end of url paths.
+                canonical = if let Some(idx) = params_index {
+                    let base_url = &canonical[..idx];
+                    let params = &canonical[idx..];
 
-                if let Some(sanitized) = base_url.strip_suffix(".git") {
-                    params_index = Some(idx - 4);
-                    canonical = format!("{}{}", sanitized, params);
+                    if let Some(sanitized) = base_url.strip_suffix(".git") {
+                        params_index = Some(idx - 4);
+                        format!("{}{}", sanitized, params)
+                    } else {
+                        canonical
+                    }
+                } else {
+                    if canonical.ends_with(".git") {
+                        canonical.truncate(canonical.len() - 4);
+                    }
+                    canonical
+                };
+
+                let ident = to_hex(hash_u64(&canonical, registry_kind));
+
+                // Strip params
+                if let Some(idx) = params_index {
+                    canonical.truncate(canonical.len() - (canonical.len() - idx));
                 }
-                canonical
-            } else {
-                if canonical.ends_with(".git") {
+
+                ident
+            }
+            HashKind::Legacy => {
+                // Chop off any query params/fragments
+                if let Some(hash) = canonical.rfind('#') {
+                    canonical.truncate(hash);
+                }
+
+                if let Some(query) = canonical.rfind('?') {
+                    canonical.truncate(query);
+                }
+
+                if canonical.ends_with('/') {
+                    canonical.pop();
+                }
+
+                let ident = to_hex(hash_u64(&canonical, registry_kind));
+
+                // Only GitHub (crates.io) repositories have their .git suffix truncated
+                if canonical.contains("github.com/") && canonical.ends_with(".git") {
                     canonical.truncate(canonical.len() - 4);
                 }
-                canonical
-            };
 
-            eprintln!("Registry Kind is {:?}", registry_kind);
-            let ident = to_hex(hash_u64(&canonical, registry_kind));
-
-            // Strip params
-            if let Some(idx) = params_index {
-                canonical.truncate(canonical.len() - (canonical.len() - idx));
+                ident
             }
-            eprintln!("Stable IDENT IS {:?}", ident);
-            eprintln!("STable Canonical is {:?}", canonical);
-            (ident, canonical)
-        }
-        HashKind::Legacy => {
-            // Chop off any query params/fragments
-            if let Some(hash) = canonical.rfind('#') {
-                canonical.truncate(hash);
-            }
+        };
 
-            if let Some(query) = canonical.rfind('?') {
-                canonical.truncate(query);
-            }
-
-            if canonical.ends_with('/') {
-                canonical.pop();
-            }
-
-            let ident = to_hex(hash_u64(&canonical, registry_kind));
-
-            // Only GitHub (crates.io) repositories have their .git suffix truncated
-            if canonical.contains("github.com/") && canonical.ends_with(".git") {
-                canonical.truncate(canonical.len() - 4);
-            }
-            eprintln!("IDENT IS {:?}", ident);
-            eprintln!("Canonical is {:?}", canonical);
-
-            (ident, canonical)
-        }
+        (ident, canonical)
+    } else {
+        (to_hex(hash_u64(url, registry_kind)), url.to_owned())
     };
 
-    eprintln!("Host is {:?}", host);
     Ok((format!("{host}-{ident}"), url))
 }
 
@@ -288,6 +296,21 @@ mod test {
         assert_eq!(
             super::url_to_local_dir(
                 "https://dl.cloudsmith.io/aBcW1234aBcW1234/embark/rust/cargo/index.git",
+                &HashKind::Stable
+            )
+            .unwrap(),
+            (
+                "dl.cloudsmith.io-5e6de3fada793d05".to_owned(),
+                "https://dl.cloudsmith.io/aBcW1234aBcW1234/embark/rust/cargo/index".to_owned()
+            )
+        );
+    }
+
+    #[test]
+    fn http_index_url_matches_index_slash() {
+        assert_eq!(
+            super::url_to_local_dir(
+                "https://dl.cloudsmith.io/aBcW1234aBcW1234/embark/rust/cargo/index/",
                 &HashKind::Stable
             )
             .unwrap(),
