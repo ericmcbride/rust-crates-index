@@ -141,6 +141,7 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
     };
 
     let mut registry_kind = SOURCE_KIND_REGISTRY;
+    eprintln!("Url before is {:?}", url);
 
     // Ensure we have a registry or bare url
     let (url, scheme_ind) = {
@@ -153,8 +154,10 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
             // if a custom uri ends with a slash it messes up the
             // hash.  BUt if we remove it from crates IO it messes it up
             // as well.
+            eprintln!("Tf is going on here");
             let url = if !url.contains("index.crates.io") {
-                if let Some(stripped_url) = url.strip_prefix('/') {
+                if let Some(stripped_url) = url.strip_suffix('/') {
+                    eprintln!("Stripped url {:?}", stripped_url);
                     stripped_url
                 } else {
                     url
@@ -259,7 +262,8 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
     } else {
         (to_hex(hash_u64(url, registry_kind)), url.to_owned())
     };
-
+    eprintln!("Ident is {:?}", ident);
+    eprintln!("Host is {:?}", host);
     Ok((format!("{host}-{ident}"), url))
 }
 
