@@ -144,7 +144,7 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
     eprintln!("Url before is {:?}", url);
 
     // Ensure we have a registry or bare url
-    let (url, scheme_ind) = {
+    let (mut url, scheme_ind) = {
         let scheme_ind = url
             .find("://")
             .ok_or_else(|| Error::Url(format!("'{url}' is not a valid url")))?;
@@ -152,7 +152,8 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
         if scheme_str.starts_with("sparse+http") {
             registry_kind = SOURCE_KIND_SPASE_REGISTRY;
             // if a custom uri ends with a slash it messes up the
-            // hash.  BUt if we remove it from crates IO it messes it up
+            // hash.  BUt if we remove it from just a base url such as
+            // https://index.crates.io/ it messes it up
             // as well.
             let url = {
                 if let Some(stripped_url) = url.strip_suffix('/') {
@@ -180,6 +181,17 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
         Some(end) => &url[scheme_ind + 3..scheme_ind + 3 + end],
         None => &url[scheme_ind + 3..],
     };
+
+    // if a custom url ends with a slash it messes up the
+    // hash.  But if we remove it from just a base url such as
+    // https://index.crates.io/ it messes it up
+    // as well.
+    let trimmed_url = host.trim_end_matches('/');
+    if let Some(last_slash_pos) = trimmed_url.rfind('/') {
+        if !trimmed_url[last_slash_pos + 1..].is_empty() {
+            url = trimmed_url
+        }
+    }
 
     // trim port
     let host = host.split(':').next().unwrap();
