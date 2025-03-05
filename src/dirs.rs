@@ -130,6 +130,18 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
         Hasher::finish(&hasher)
     }
 
+    fn has_path_past_base(url: &str) -> bool {
+        if let Some(protocol_end) = url.find("://") {
+            // skip past protocol
+            let base_url_end = protocol_end + 3;
+            let rest_of_url = &url[base_url_end..];
+
+            // Check if there's any path or meaningful content after the domain (ignoring any trailing slashes)
+            return rest_of_url.trim_end_matches('/').contains('/');
+        }
+        false
+    }
+
     // Matches https://github.com/rust-lang/cargo/blob/2928e32734b04925ee51e1ae88bea9a83d2fd451/src/cargo/util/hex.rs#L6
     fn to_hex(num: u64) -> String {
         hex::encode(num.to_le_bytes())
@@ -141,7 +153,6 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
     };
 
     let mut registry_kind = SOURCE_KIND_REGISTRY;
-    eprintln!("Url before is {:?}", url);
 
     // Ensure we have a registry or bare url
     let (mut url, scheme_ind) = {
@@ -151,18 +162,6 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
         let scheme_str = &url[..scheme_ind];
         if scheme_str.starts_with("sparse+http") {
             registry_kind = SOURCE_KIND_SPASE_REGISTRY;
-            // if a custom uri ends with a slash it messes up the
-            // hash.  BUt if we remove it from just a base url such as
-            // https://index.crates.io/ it messes it up
-            // as well.
-            let url = {
-                if let Some(stripped_url) = url.strip_suffix('/') {
-                    eprintln!("Stripped url {:?}", stripped_url);
-                    stripped_url
-                } else {
-                    url
-                }
-            };
             (url, scheme_ind)
         } else if let Some(ind) = scheme_str.find('+') {
             if &scheme_str[..ind] != "registry" {
@@ -185,11 +184,12 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
     // if a custom url ends with a slash it messes up the
     // hash.  But if we remove it from just a base url such as
     // https://index.crates.io/ it messes it up
-    // as well.
-    let trimmed_url = host.trim_end_matches('/');
-    if let Some(last_slash_pos) = trimmed_url.rfind('/') {
-        if !trimmed_url[last_slash_pos + 1..].is_empty() {
-            url = trimmed_url
+    // as well. So we strip if it has a path
+    // past the base url
+    let needs_to_strip = has_path_past_base(url);
+    if needs_to_strip {
+        if let Some(stripped_url) = url.strip_suffix('/') {
+            url = stripped_url;
         }
     }
 
@@ -270,8 +270,6 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
     } else {
         (to_hex(hash_u64(url, registry_kind)), url.to_owned())
     };
-    eprintln!("Ident is {:?}", ident);
-    eprintln!("Host is {:?}", host);
     Ok((format!("{host}-{ident}"), url))
 }
 
