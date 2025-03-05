@@ -169,7 +169,7 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
         Some(end) => &url[scheme_ind + 3..scheme_ind + 3 + end],
         None => &url[scheme_ind + 3..],
     };
-
+    eprintln!("Host after match url {:?}", host);
     // trim port
     let host = host.split(':').next().unwrap();
 
@@ -213,14 +213,15 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
                 canonical
             };
 
+            eprintln!("Registry Kind is {:?}", registry_kind);
             let ident = to_hex(hash_u64(&canonical, registry_kind));
 
             // Strip params
             if let Some(idx) = params_index {
                 canonical.truncate(canonical.len() - (canonical.len() - idx));
             }
-            eprintln!("IDENT IS {:?}", ident);
-            eprintln!("Canonical is {:?}", canonical);
+            eprintln!("Stable IDENT IS {:?}", ident);
+            eprintln!("STable Canonical is {:?}", canonical);
             (ident, canonical)
         }
         HashKind::Legacy => {
@@ -250,6 +251,7 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
         }
     };
 
+    eprintln!("Host is {:?}", host);
     Ok((format!("{host}-{ident}"), url))
 }
 
