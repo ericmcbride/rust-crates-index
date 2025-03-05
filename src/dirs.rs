@@ -154,16 +154,13 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
             // if a custom uri ends with a slash it messes up the
             // hash.  BUt if we remove it from crates IO it messes it up
             // as well.
-            eprintln!("Tf is going on here");
-            let url = if !url.contains("index.crates.io") {
+            let url = {
                 if let Some(stripped_url) = url.strip_suffix('/') {
                     eprintln!("Stripped url {:?}", stripped_url);
                     stripped_url
                 } else {
                     url
                 }
-            } else {
-                url
             };
             (url, scheme_ind)
         } else if let Some(ind) = scheme_str.find('+') {
@@ -177,7 +174,6 @@ fn url_to_local_dir(url: &str, hash_kind: &HashKind) -> Result<(String, String),
         }
     };
 
-    eprintln!("Url is {:?}", url);
     // Could use the Url crate for this, but it's simple enough and we don't
     // need to deal with every possible url (I hope...)
     let host = match url[scheme_ind + 3..].find('/') {
