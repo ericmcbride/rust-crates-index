@@ -57,7 +57,7 @@ impl SparseIndex {
         if !url.starts_with("sparse+http") {
             return Err(Error::Url(url.to_owned()));
         }
-
+        eprintln!("Hash kind for {} is {:?}", url, hash_kind);
         let (path, url) = local_path_and_canonical_url_with_hash_kind(url, Some(cargo_home.as_ref()), hash_kind)?;
         Ok(Self::at_path(path, url))
     }

@@ -85,6 +85,7 @@ const SOURCE_KIND_REGISTRY: SourceKind = 2;
 const SOURCE_KIND_SPASE_REGISTRY: SourceKind = 3;
 
 /// Determine the crate registry hashing strategy for locating local crate indexes.
+#[derive(Debug)]
 pub enum HashKind {
     /// Use the new hashing behavior introduced in Rust `1.85.0`.
     Stable,
